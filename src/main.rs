@@ -7,11 +7,13 @@ use chrono::prelude::*;
 use chrono::{NaiveDate, Datelike, DateTime, Local, Utc, TimeZone};
 use csv::{Writer, ReaderBuilder};
 
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct Event {
     timestamp: u64,
     description: String,
 }
 
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct EventItem {
     days: i64,
     event: Event,
@@ -104,12 +106,14 @@ fn run(_args: &[String]) -> Result<(), DaysError> {
             }
         }
 
+        past_items.sort_by(|a, b| b.days.cmp(&a.days));
         println!("Past events");
         println!("-----------");
         for item in past_items {
             println!("{} days ago\t{}", item.days.abs(), item.event.description);
         }
 
+        future_items.sort_by(|a, b| a.days.cmp(&b.days));
         println!("\nUpcoming events");
         println!("---------------");
         for item in future_items {
