@@ -2,7 +2,16 @@
 name = "days"
 version = "0.1.0"
 edition = "2021"
+authors = ["Jere Käpyaho <2261936+jerekapyaho@users.noreply.github.com>"]
+license = "MIT"
+description = """
+Utility program to show days since or until events in the terminal.
+"""
+repository = "https://github.com/coniferprod/days-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+exitcode = "1.1.2"
+env_logger = "0.9.0"
+log = "0.4.14"
