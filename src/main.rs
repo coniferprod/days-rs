@@ -201,13 +201,14 @@ fn print_birthday() {
                     .ymd(birthday.year(), birthday.month(), birthday.day())
                     .and_hms(today.time().hour(), today.time().minute(), today.time().second());
 
+                if birthday.month() == today.month() && birthday.day() == today.day() {
+                    print!("Happy birthday! ");
+                }
+    
                 let diff = today.signed_duration_since(birthday_dt);
                 let day_count = diff.num_days();
-                print!("You were born {} days ago.", day_count);
+                print!("You are {} days old.", day_count);
 
-                if birthday.month() == today.month() && birthday.day() == today.day() {
-                    print!(" Happy birthday to you!");
-                }
                 println!();
             },
             Err(_) => {
