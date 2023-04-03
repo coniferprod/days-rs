@@ -32,6 +32,7 @@ enum DaysError {
     CreateError,
     WriteError,
     ReadError,
+    InvalidDate,
 }
 
 impl fmt::Display for DaysError {
@@ -51,7 +52,10 @@ impl fmt::Display for DaysError {
             },
             DaysError::CreateError => {
                 write!(f, "Unable to crate working directory")
-            }
+            },
+            DaysError::InvalidDate => {
+                write!(f, "Invalid date")
+            },
         }
     }
 }
@@ -80,6 +84,7 @@ fn run(_args: &[String]) -> Result<(), DaysError> {
         if events_path.as_path().exists() {
             // Read in the events
             if let Err(_) = read_events(&mut events, events_path.as_path()) {
+                eprintln!("Error reading events");
                 return Err(DaysError::ReadError);
             }
 
@@ -98,7 +103,6 @@ fn run(_args: &[String]) -> Result<(), DaysError> {
 
 fn read_events(events: &mut Vec<Event>, path: &Path) -> Result<(), Box<dyn Error>> {
     let mut reader = ReaderBuilder::new().has_headers(true).from_path(path)?;
-    events.clear();
     for result in reader.records() {
         let record = result?;
         let category = record[1].to_string();
@@ -117,9 +121,9 @@ fn read_events(events: &mut Vec<Event>, path: &Path) -> Result<(), Box<dyn Error
 
 fn write_events(events: Vec<Event>, path: &Path) -> Result<(), Box<dyn Error>> {
     let mut writer = Writer::from_path(path)?;
-    writer.write_record(&["timestamp", "description"])?;
+    writer.write_record(&["date", "category", "description"])?;
     for event in events.iter() {
-        writer.write_record(&[event.date.to_string(), event.description.clone()])?;
+        writer.write_record(&[event.date.to_string(), event.category.clone(), event.description.clone()])?;
     }
     writer.flush()?;
     Ok(())
@@ -129,7 +133,7 @@ fn write_events(events: Vec<Event>, path: &Path) -> Result<(), Box<dyn Error>> {
 
 fn get_days_path() -> Option<PathBuf> {
     // NOTE: Don't use std::env::home_dir to get the home directory,
-    // it doesn't work like it should! Use the dirs crate instead.
+    // it doesn't work like it should! Use the `dirs` crate instead.
     match dirs::home_dir() {
         Some(home_dir) => {
             let mut path = home_dir.clone();
@@ -180,7 +184,8 @@ fn main() -> Result<(), DaysError> {
 
     let args: Vec<String> = env::args().collect();
 
-    std::process::exit(match run(&args[1..]) {
+    let result = run(&args[1..]);
+    std::process::exit(match result {
         Ok(_) => exitcode::OK,
         Err(err) => {
             eprintln!("error: {:?}", err);
