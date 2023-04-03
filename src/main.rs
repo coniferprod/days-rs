@@ -3,14 +3,20 @@ use std::io;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::fmt;
-use chrono::prelude::*;
-use chrono::{NaiveDate, Datelike, DateTime, Local, Utc, TimeZone};
+use chrono::{NaiveDate, Datelike, DateTime, Local};
 use csv::{Writer, ReaderBuilder};
 
 #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct Event {
-    timestamp: u64,
+    date: NaiveDate,
+    category: String,
     description: String,
+}
+
+impl fmt::Display for Event {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}: {} ({})", self.date.to_string(), self.description, self.category)
+    }
 }
 
 #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -56,8 +62,6 @@ fn run(_args: &[String]) -> Result<(), DaysError> {
     print_birthday();
 
     let mut events: Vec<Event> = Vec::new();
-    let mut past_items: Vec<EventItem> = Vec::new();
-    let mut future_items: Vec<EventItem> = Vec::new();
 
     if let Some(path) = get_days_path() {
         // Create the working directory if it does not exist.
@@ -79,47 +83,10 @@ fn run(_args: &[String]) -> Result<(), DaysError> {
                 return Err(DaysError::ReadError);
             }
 
-            let today: DateTime<Local> = Local::now();
-
-            for event in events {
-
-                let event_dt = Utc.timestamp(event.timestamp as i64, 0);
-
-                let diff = event_dt.signed_duration_since(today);
-                let day_count = diff.num_days();
-                if day_count <= 0 {
-                    past_items.push(EventItem { days: day_count, event });
-                }
-                else {
-                    future_items.push(EventItem { days: day_count, event });
-                }
+            for event in events.iter() {
+                println!("{}", event);
             }
         }
-        else {
-            // Create the file with one seed event:
-            let now: DateTime<Utc> = Utc::now();
-
-            events.push(Event { timestamp: now.timestamp() as u64, description: "Started to use the days program.".to_string()});
-
-            if let Err(_) = write_events(events, events_path.as_path()) {
-                return Err(DaysError::WriteError);
-            }
-        }
-
-        past_items.sort_by(|a, b| b.days.cmp(&a.days));
-        println!("Past events");
-        println!("-----------");
-        for item in past_items {
-            println!("{} days ago\t{}", item.days.abs(), item.event.description);
-        }
-
-        future_items.sort_by(|a, b| a.days.cmp(&b.days));
-        println!("\nUpcoming events");
-        println!("---------------");
-        for item in future_items {
-            println!("In {} days\t{}", item.days.abs(), item.event.description);
-        }
-        println!();
 
         Ok(())
     }
@@ -134,12 +101,15 @@ fn read_events(events: &mut Vec<Event>, path: &Path) -> Result<(), Box<dyn Error
     events.clear();
     for result in reader.records() {
         let record = result?;
-        let description = record[1].to_string();
-        if let Some(timestamp) = record[0].parse().ok() {
-            events.push(Event { timestamp, description });
-        }
-        else {
-            eprintln!("Invalid timestamp '{}' in event '{}'", record[0].to_string(), description);
+        let category = record[1].to_string();
+        let description = record[2].to_string();
+        match NaiveDate::parse_from_str(&record[0], "%Y-%m-%d") {
+            Ok(date) => {
+                events.push(Event { date, category, description });
+            },
+            Err(_) => {
+                eprintln!("Invalid timestamp '{}'", record[0].to_string());
+            }
         }
     }
     Ok(())
@@ -149,7 +119,7 @@ fn write_events(events: Vec<Event>, path: &Path) -> Result<(), Box<dyn Error>> {
     let mut writer = Writer::from_path(path)?;
     writer.write_record(&["timestamp", "description"])?;
     for event in events.iter() {
-        writer.write_record(&[event.timestamp.to_string(), event.description.clone()])?;
+        writer.write_record(&[event.date.to_string(), event.description.clone()])?;
     }
     writer.flush()?;
     Ok(())
@@ -175,26 +145,30 @@ fn get_days_path() -> Option<PathBuf> {
 }
 
 fn print_birthday() {
-    if let Ok(value) = env::var("BIRTHDAY") {
+    if let Ok(value) = env::var("BIRTHDATE") {
         match NaiveDate::parse_from_str(&value, "%Y-%m-%d") {
-            Ok(birthday) => {
-                let today: DateTime<Local> = Local::now();
-
-                let birthday_dt = Local
-                    .ymd(birthday.year(), birthday.month(), birthday.day())
-                    .and_hms(today.time().hour(), today.time().minute(), today.time().second());
-
-                let diff = today.signed_duration_since(birthday_dt);
-                let day_count = diff.num_days();
-                print!("You were born {} days ago.", day_count);
-
-                if birthday.month() == today.month() && birthday.day() == today.day() {
-                    print!(" Happy birthday to you!");
+            Ok(birthdate) => {
+                let now: DateTime<Local> = Local::now();
+                match NaiveDate::from_ymd_opt(now.year(), now.month(), now.day()) {
+                    Some(now_date) => {
+                        if birthdate.month() == now_date.month() && birthdate.day() == now_date.day() {
+                            print!("Happy birthday! ");
+                        }
+                        let diff = now_date.signed_duration_since(birthdate);
+                        let day_count = diff.num_days();
+                        print!("You are {} days old.", day_count);
+                        if day_count % 1000 == 0 {
+                            print!(" That's a nice round number!");
+                        }
+                        println!();
+                    },
+                    None => {
+                        eprintln!("Unable to get today's date");
+                    }
                 }
-                println!();
             },
             Err(_) => {
-                eprintln!("Error in the value of the BIRTHDAY environment variable: \
+                eprintln!("Error in the value of the BIRTHDATE environment variable: \
                     '{}' is not a valid date.", value);
             }
         };
